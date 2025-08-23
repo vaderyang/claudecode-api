@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run build:*)",
+      "Bash(timeout 10s npm run dev)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebSearch",
+      "Bash(grep:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

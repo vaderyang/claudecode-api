@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Calculator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Light theme (default) */
+        .light-theme {
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        /* Dark theme */
+        .dark-theme {
+            background-color: #1a1a1a;
+            color: #fff;
+        }
+
+        .calculator-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: 2px solid;
+            border-radius: 25px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .light-theme .theme-toggle {
+            border-color: #333;
+            color: #333;
+        }
+
+        .dark-theme .theme-toggle {
+            border-color: #fff;
+            color: #fff;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.05);
+        }
+
+        .calculator {
+            background: linear-gradient(145deg, #ffffff, #e6e6e6);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .dark-theme .calculator {
+            background: linear-gradient(145deg, #2d2d2d, #1a1a1a);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .display {
+            width: 100%;
+            height: 80px;
+            font-size: 2.5em;
+            text-align: right;
+            padding: 0 20px;
+            border: none;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            background: #f8f9fa;
+            color: #333;
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .dark-theme .display {
+            background: #333;
+            color: #fff;
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            width: 320px;
+        }
+
+        .btn {
+            width: 70px;
+            height: 70px;
+            font-size: 1.4em;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Number buttons */
+        .btn.number {
+            background: linear-gradient(145deg, #ffffff, #e6e6e6);
+            color: #333;
+        }
+
+        .dark-theme .btn.number {
+            background: linear-gradient(145deg, #4a4a4a, #3a3a3a);
+            color: #fff;
+        }
+
+        /* Operator buttons */
+        .btn.operator {
+            background: linear-gradient(145deg, #ff9500, #e6851a);
+            color: white;
+        }
+
+        .dark-theme .btn.operator {
+            background: linear-gradient(145deg, #ff9500, #cc7a00);
+        }
+
+        /* Clear and equals buttons */
+        .btn.clear {
+            background: linear-gradient(145deg, #ff3b30, #e6342a);
+            color: white;
+        }
+
+        .btn.equals {
+            background: linear-gradient(145deg, #34c759, #2ea04c);
+            color: white;
+        }
+
+        .btn.zero {
+            grid-column: span 2;
+            width: 155px;
+        }
+
+        /* Responsive design */
+        @media (max-width: 480px) {
+            .calculator {
+                padding: 20px;
+            }
+            
+            .buttons {
+                width: 280px;
+            }
+            
+            .btn {
+                width: 60px;
+                height: 60px;
+                font-size: 1.2em;
+            }
+            
+            .btn.zero {
+                width: 135px;
+            }
+            
+            .display {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body class="light-theme">
+    <div class="calculator-container">
+        <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+        
+        <div class="calculator">
+            <input type="text" class="display" id="display" readonly>
+            
+            <div class="buttons">
+                <button class="btn clear" onclick="clearDisplay()">C</button>
+                <button class="btn clear" onclick="clearEntry()">CE</button>
+                <button class="btn operator" onclick="appendToDisplay('/')">/</button>
+                <button class="btn operator" onclick="appendToDisplay('*')">×</button>
+                
+                <button class="btn number" onclick="appendToDisplay('7')">7</button>
+                <button class="btn number" onclick="appendToDisplay('8')">8</button>
+                <button class="btn number" onclick="appendToDisplay('9')">9</button>
+                <button class="btn operator" onclick="appendToDisplay('-')">-</button>
+                
+                <button class="btn number" onclick="appendToDisplay('4')">4</button>
+                <button class="btn number" onclick="appendToDisplay('5')">5</button>
+                <button class="btn number" onclick="appendToDisplay('6')">6</button>
+                <button class="btn operator" onclick="appendToDisplay('+')">+</button>
+                
+                <button class="btn number" onclick="appendToDisplay('1')">1</button>
+                <button class="btn number" onclick="appendToDisplay('2')">2</button>
+                <button class="btn number" onclick="appendToDisplay('3')">3</button>
+                <button class="btn equals" onclick="calculate()" rowspan="2">=</button>
+                
+                <button class="btn number zero" onclick="appendToDisplay('0')">0</button>
+                <button class="btn number" onclick="appendToDisplay('.')">.</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let display = document.getElementById('display');
+        let currentInput = '';
+        let shouldResetDisplay = false;
+
+        function appendToDisplay(value) {
+            if (shouldResetDisplay) {
+                currentInput = '';
+                shouldResetDisplay = false;
+            }
+            
+            // Prevent multiple decimal points in the same number
+            if (value === '.') {
+                let lastNumber = currentInput.split(/[\+\-\*\/]/).pop();
+                if (lastNumber.includes('.')) {
+                    return;
+                }
+            }
+            
+            currentInput += value;
+            display.value = currentInput;
+        }
+
+        function clearDisplay() {
+            currentInput = '';
+            display.value = '';
+        }
+
+        function clearEntry() {
+            if (currentInput.length > 0) {
+                currentInput = currentInput.slice(0, -1);
+                display.value = currentInput;
+            }
+        }
+
+        function calculate() {
+            try {
+                if (currentInput === '') return;
+                
+                // Replace × with * for calculation
+                let expression = currentInput.replace(/×/g, '*');
+                
+                // Basic validation to prevent code injection
+                if (!/^[0-9+\-*/.() ]+$/.test(expression)) {
+                    throw new Error('Invalid expression');
+                }
+                
+                let result = eval(expression);
+                
+                // Handle division by zero and other edge cases
+                if (!isFinite(result)) {
+                    throw new Error('Invalid operation');
+                }
+                
+                display.value = result;
+                currentInput = result.toString();
+                shouldResetDisplay = true;
+            } catch (error) {
+                display.value = 'Error';
+                currentInput = '';
+                shouldResetDisplay = true;
+            }
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const themeToggle = document.querySelector('.theme-toggle');
+            
+            if (body.classList.contains('light-theme')) {
+                body.classList.remove('light-theme');
+                body.classList.add('dark-theme');
+                themeToggle.textContent = '☀️ Light Mode';
+            } else {
+                body.classList.remove('dark-theme');
+                body.classList.add('light-theme');
+                themeToggle.textContent = '🌙 Dark Mode';
+            }
+        }
+
+        // Keyboard support
+        document.addEventListener('keydown', function(event) {
+            const key = event.key;
+            
+            if (key >= '0' && key <= '9' || key === '.') {
+                appendToDisplay(key);
+            } else if (key === '+' || key === '-' || key === '/' || key === '*') {
+                appendToDisplay(key === '*' ? '×' : key);
+            } else if (key === 'Enter' || key === '=') {
+                event.preventDefault();
+                calculate();
+            } else if (key === 'Escape' || key === 'c' || key === 'C') {
+                clearDisplay();
+            } else if (key === 'Backspace') {
+                clearEntry();
+            }
+        });
+    </script>
+</body>
+</html>
