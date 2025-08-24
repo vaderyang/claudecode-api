@@ -10,7 +10,6 @@ To enable reasoning streaming, include the `reasoning: true` field in your Respo
 
 ```json
 {
-  "model": "claude-3-5-sonnet-20241022",
   "messages": [
     {
       "role": "user", 

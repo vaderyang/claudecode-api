@@ -468,4 +468,4 @@ LOG_LEVEL=debug
 
 ## License
 
-ISC License - see package.json for details.
+MIT License - see [LICENSE](LICENSE) file for details.
