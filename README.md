@@ -1,4 +1,4 @@
-# Claude Code API
+# claudecode-api
 
 An OpenAI-compatible API service powered by Claude Code that provides agentic capabilities through traditional chat completion endpoints.
 
@@ -44,7 +44,7 @@ flowchart LR
 
 ```
 ┌─────────────────┐    ┌───────────────────────────────────────────────────────────────┐
-│   OpenAI        │    │                    Claude Code API Service                    │
+│   OpenAI        │    │                   claudecode-api Service                    │
 │ Compatible      │    │                                                               │
 │   Client        │    │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────────┐ │
 │                 │    │  │   Express   │  │ Middleware   │  │     Controller        │ │
