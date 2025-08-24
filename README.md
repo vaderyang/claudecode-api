@@ -8,6 +8,104 @@ This service acts as a bridge between OpenAI's Chat Completions API format and C
 
 ### API Processing Flow
 
+#### Interactive Mermaid Diagram
+
+```mermaid
+flowchart TB
+    %% Client Layer
+    Client["🖥️ OpenAI Compatible Client<br/>Python/Node.js/cURL"]
+    
+    %% API Endpoints
+    ChatEndpoint["/v1/chat/completions<br/>📡 Standard OpenAI API"]
+    ResponseEndpoint["/v1/responses<br/>🔧 2025 Responses API"]
+    
+    %% Middleware Layer
+    subgraph Middleware ["🛡️ Express Middleware"]
+        Auth["🔐 Authentication"]
+        Validation["✅ Request Validation"]
+        CORS["🌐 CORS Headers"]
+    end
+    
+    %% Controller Layer
+    subgraph Controller ["🎮 Controller Layer"]
+        ValidateReq["📋 Validate Request"]
+        TransformFormat["🔄 Transform Format"]
+        SessionGen["🆔 Generate Session ID"]
+    end
+    
+    %% Service Layer
+    subgraph ClaudeService ["⚙️ ClaudeCodeService"]
+        Transform["🔄 Transform OpenAI → Claude Format<br/>• Extract messages<br/>• Build prompt string<br/>• Set /public directory"]
+        
+        subgraph ClaudeSDK ["🧠 @anthropic-ai/claude-code SDK"]
+            QueryFunc["🚀 query() Function<br/>• Built-in auth (no API keys)<br/>• Agentic capabilities<br/>• Tool usage (files, commands)<br/>• Permission bypass mode<br/>• Async streaming"]
+            ModelNote["⚠️ Model name ignored<br/>All requests → Claude Code"]
+        end
+        
+        ResponseProc["📄 Response Processing<br/>• Collect assistant messages<br/>• Detect file operations<br/>• Directory snapshots<br/>• Read file contents<br/>• Generate metadata"]
+    end
+    
+    %% Response Flow
+    subgraph ResponseFlow ["📤 Response Flow"]
+        subgraph Streaming ["🌊 Streaming"]
+            StreamMsg["• Stream assistant msgs<br/>• Chunk response text<br/>• Stream file contents<br/>• SSE format<br/>• [DONE] marker"]
+        end
+        
+        subgraph NonStreaming ["📦 Non-Streaming"]
+            CompleteResp["• Collect complete response<br/>• Transform to OpenAI format<br/>• Include file code blocks<br/>• Add usage metadata<br/>• Return JSON"]
+        end
+    end
+    
+    %% File Operations
+    FileOps["📁 File Operations<br/>• Auto-detect created files<br/>• Include file contents<br/>• Syntax highlighting<br/>• Operation tracking<br/>• Path resolution"]
+    
+    %% Flow connections
+    Client --> ChatEndpoint
+    Client --> ResponseEndpoint
+    
+    ChatEndpoint --> Auth
+    ResponseEndpoint --> Auth
+    
+    Auth --> Validation
+    Validation --> CORS
+    CORS --> ValidateReq
+    
+    ValidateReq --> TransformFormat
+    TransformFormat --> SessionGen
+    SessionGen --> Transform
+    
+    Transform --> QueryFunc
+    QueryFunc --> ModelNote
+    ModelNote --> ResponseProc
+    
+    ResponseProc --> StreamMsg
+    ResponseProc --> CompleteResp
+    ResponseProc --> FileOps
+    
+    StreamMsg --> Client
+    CompleteResp --> Client
+    
+    %% Styling
+    classDef clientStyle fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    classDef endpointStyle fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef middlewareStyle fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef serviceStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef claudeStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef responseStyle fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    
+    class Client clientStyle
+    class ChatEndpoint,ResponseEndpoint endpointStyle
+    class Auth,Validation,CORS,ValidateReq,TransformFormat,SessionGen middlewareStyle
+    class Transform,ResponseProc serviceStyle
+    class QueryFunc,ModelNote claudeStyle
+    class StreamMsg,CompleteResp,FileOps responseStyle
+```
+
+#### ASCII Diagram (Detailed View)
+
+<details>
+<summary>Click to expand ASCII diagram</summary>
+
 ```
 ┌─────────────────┐    ┌───────────────────────────────────────────────────────────────┐
 │   OpenAI        │    │                    Claude Code API Service                    │
@@ -62,7 +160,7 @@ This service acts as a bridge between OpenAI's Chat Completions API format and C
                        │  │  • Create before/after directory snapshots                           │    │
                        │  │  • Read modified file contents                                        │    │
                        │  │  • Generate file operation metadata                                   │    │
-                       │  └─────────────────────────────────────────────────────────────────────────┘    │
+                       │  │  └─────────────────────────────────────────────────────────────────────────┘    │
                        └────────────────────────────────────────┬──────────────────────────────────────────┘
                                                                │
 ┌──────────────────────────────────────────────────────────────▼──────────────────────────────────────────┐
@@ -91,6 +189,8 @@ This service acts as a bridge between OpenAI's Chat Completions API format and C
 │                                   └─────────────────────────────────┘                                    │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ## Features
 
