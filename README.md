@@ -6,6 +6,92 @@ An OpenAI-compatible API service powered by Claude Code that provides agentic ca
 
 This service acts as a bridge between OpenAI's Chat Completions API format and Claude Code's agentic capabilities. Users can use any OpenAI-compatible client to interact with Claude Code's advanced development features.
 
+### API Processing Flow
+
+```
+┌─────────────────┐    ┌───────────────────────────────────────────────────────────────┐
+│   OpenAI        │    │                    Claude Code API Service                    │
+│ Compatible      │    │                                                               │
+│   Client        │    │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────────┐ │
+│                 │    │  │   Express   │  │ Middleware   │  │     Controller        │ │
+│  ┌──────────┐   │    │  │   Router    │  │              │  │                       │ │
+│  │   POST   │───┼────┼──►/v1/chat/   │──►│ • Auth       │──►│ • Validate Request    │ │
+│  │ /v1/chat/│   │    │  │completions  │  │ • Validation │  │ • Transform Format    │ │
+│  │completion│   │    │  │             │  │ • CORS       │  │ • Generate Session ID │ │
+│  └──────────┘   │    │  └─────────────┘  └──────────────┘  └───────────────────────┘ │
+│                 │    │                                                               │
+│  ┌──────────┐   │    │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────────┐ │
+│  │   POST   │───┼────┼──►/v1/responses│──►│ Same         │──►│ Same Processing +     │ │
+│  │/v1/responses│   │    │  (2025 API) │  │ Middleware   │  │ Enhanced Tool Support │ │
+│  └──────────┘   │    │  └─────────────┘  └──────────────┘  └───────────────────────┘ │
+└─────────────────┘    └───────────────────────────────────────┬───────────────────────┘
+                                                               │
+                       ┌────────────────────────────────────────▼────────────────────────────────────────┐
+                       │                     ClaudeCodeService                                            │
+                       │                                                                                   │
+                       │  ┌─────────────────────────────────────────────────────────────────────────┐    │
+                       │  │              Transform OpenAI → Claude Code Format                     │    │
+                       │  │  • Extract messages (system, user, assistant)                        │    │
+                       │  │  • Build prompt string from conversation history                      │    │
+                       │  │  • Extract system context and custom instructions                     │    │
+                       │  │  • Set working directory to /public for file operations             │    │
+                       │  └─────────────────────────────────────────────────────────────────────────┘    │
+                       │                                       │                                          │
+                       │                                       ▼                                          │
+                       │  ┌─────────────────────────────────────────────────────────────────────────┐    │
+                       │  │                    @anthropic-ai/claude-code SDK                       │    │
+                       │  │                                                                         │    │
+                       │  │  ┌─────────────────────────────────────────────────────────────┐      │    │
+                       │  │  │                query() Function                               │      │    │
+                       │  │  │  • Built-in authentication (no API keys needed)             │      │    │
+                       │  │  │  • Advanced agentic capabilities                            │      │    │
+                       │  │  │  • Tool usage (create_file, edit_files, run_command)       │      │    │
+                       │  │  │  • File system operations in /public directory            │      │    │
+                       │  │  │  • Permission bypass mode enabled                          │      │    │
+                       │  │  │  • Returns async generator for streaming                   │      │    │
+                       │  │  └─────────────────────────────────────────────────────────────┘      │    │
+                       │  │                                                                         │    │
+                       │  │  Note: Model name is ignored - all requests processed by Claude Code   │    │
+                       │  └─────────────────────────────────────────────────────────────────────────┘    │
+                       │                                       │                                          │
+                       │                                       ▼                                          │
+                       │  ┌─────────────────────────────────────────────────────────────────────────┐    │
+                       │  │                Response Processing & File Detection                     │    │
+                       │  │  • Collect assistant messages and tool results                       │    │
+                       │  │  • Detect file operations (create_file, edit_files)                  │    │
+                       │  │  • Create before/after directory snapshots                           │    │
+                       │  │  • Read modified file contents                                        │    │
+                       │  │  • Generate file operation metadata                                   │    │
+                       │  └─────────────────────────────────────────────────────────────────────────┘    │
+                       └────────────────────────────────────────┬──────────────────────────────────────────┘
+                                                               │
+┌──────────────────────────────────────────────────────────────▼──────────────────────────────────────────┐
+│                                  Response Flow                                                            │
+│                                                                                                           │
+│  ┌─────────────────────────────┐                    ┌─────────────────────────────────────────────────┐  │
+│  │      Streaming Response     │                    │           Non-Streaming Response                │  │
+│  │                            │                    │                                                │  │
+│  │  ┌─────────────────────────┐ │                    │  ┌─────────────────────────────────────────────┐ │  │
+│  │  │• Stream assistant msgs  │ │                    │  │• Collect complete response              │ │  │
+│  │  │• Chunk response text    │ │                    │  │• Transform Claude → OpenAI format       │ │  │
+│  │  │• Stream file contents   │ │                    │  │• Include file contents as code blocks  │ │  │
+│  │  │• SSE format chunks      │ │                    │  │• Add usage metadata                    │ │  │
+│  │  │• Send [DONE] marker     │ │                    │  │• Return complete JSON response          │ │  │
+│  │  └─────────────────────────┘ │                    │  └─────────────────────────────────────────────┘ │  │
+│  └─────────────────────────────┘                    └─────────────────────────────────────────────────┘  │
+│                                                                                                           │
+│                                   ┌─────────────────────────────────┐                                    │
+│                                   │        File Operations          │                                    │
+│                                   │                                 │                                    │
+│                                   │  • Auto-detect created files   │                                    │
+│                                   │  • Include file contents       │                                    │
+│                                   │  • Syntax highlighting support │                                    │
+│                                   │  • Operation type tracking     │                                    │
+│                                   │  • Relative path resolution    │                                    │
+│                                   └─────────────────────────────────┘                                    │
+└───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Features
 
 - ✅ **Real Claude Code SDK Integration** - Uses official @anthropic-ai/claude-code SDK
@@ -109,19 +195,6 @@ curl -X POST http://localhost:3000/v1/responses \
   }'
 ```
 
-#### Available Models
-
-The service supports all major OpenAI models:
-- `claude-code-v1` - Default Claude Code model
-- `gpt-3.5-turbo` - GPT-3.5 Turbo
-- `gpt-4` - GPT-4 base model
-- `gpt-4-turbo` - GPT-4 Turbo
-- `gpt-4o` - GPT-4 Omni
-- `gpt-4o-mini` - GPT-4 Omni Mini
-- `o1` - OpenAI o1 reasoning model
-- `o1-mini` - OpenAI o1 Mini
-- `o3` - **NEW** OpenAI o3 advanced reasoning model
-- `o3-mini` - **NEW** OpenAI o3 Mini
 
 #### Streaming Support
 
