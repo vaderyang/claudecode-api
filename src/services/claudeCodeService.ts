@@ -37,7 +37,56 @@ class ClaudeCodeService {
   private validateSetup(): void {
     // Claude Code SDK handles its own authentication
     // No API key validation needed
-    logger.debug('Claude Code service initialized - using built-in authentication');
+    logger.debug('Claude Code service initialized - using built-in authentication', {
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      publicDirExists: require('fs').existsSync(this.publicDir)
+    });
+  }
+
+  private async retryWithExponentialBackoff<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 2,
+    baseDelayMs: number = 1000,
+    context: string = 'operation'
+  ): Promise<T> {
+    let lastError: Error;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
+          logger.info(`Retrying ${context} (attempt ${attempt + 1}/${maxRetries + 1}) after ${delayMs}ms delay`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+        
+        return await operation();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        logger.warn(`${context} failed on attempt ${attempt + 1}`, {
+          error: lastError.message,
+          attempt: attempt + 1,
+          maxRetries: maxRetries + 1
+        });
+        
+        // Don't retry on certain types of errors
+        if (lastError.message.includes('permission denied') || 
+            lastError.message.includes('authentication failed') ||
+            lastError.message.includes('not found')) {
+          logger.error(`Non-retryable error in ${context}`, {
+            error: lastError.message
+          });
+          throw lastError;
+        }
+      }
+    }
+    
+    logger.error(`${context} failed after ${maxRetries + 1} attempts`, {
+      finalError: lastError!.message
+    });
+    throw lastError!;
   }
 
   async processRequest(request: ClaudeCodeRequest): Promise<ClaudeCodeResponse> {
@@ -56,7 +105,10 @@ class ClaudeCodeService {
       const publicDir = process.cwd() + '/public';
       const options: any = {
         cwd: publicDir,
-        permissionMode: 'bypassPermissions'
+        permissionMode: 'bypassPermissions',
+        // Force using Node.js instead of Bun to avoid compatibility issues
+        executable: 'node',
+        executableArgs: []
       };
       
       if (request.context) {
@@ -90,11 +142,35 @@ class ClaudeCodeService {
         timestamp: new Date().toISOString()
       });
 
-      // Use Claude Code SDK query function
-      for await (const message of query({
-        prompt: request.prompt,
-        options
-      })) {
+      // Use Claude Code SDK query function with retry logic
+      const queryOperation = async () => {
+        const messages: any[] = [];
+        
+        for await (const message of query({
+          prompt: request.prompt,
+          options
+        })) {
+          messages.push(message);
+          
+          if (message.type === 'result') {
+            if (message.subtype === 'error_max_turns' || message.subtype === 'error_during_execution') {
+              throw new ClaudeCodeError(`Claude Code execution failed: ${message.subtype}`);
+            }
+          }
+        }
+        
+        return messages;
+      };
+      
+      const allMessages = await this.retryWithExponentialBackoff(
+        queryOperation,
+        2,
+        2000,
+        `Claude Code query for session ${request.sessionId}`
+      );
+      
+      // Process all messages
+      for (const message of allMessages) {
         // Collect all messages for file operation detection
         messages.push(message);
         
@@ -132,14 +208,21 @@ class ClaudeCodeService {
             });
             break;
           } else if (message.subtype === 'error_max_turns' || message.subtype === 'error_during_execution') {
-            logger.error('Claude Code execution failed', {
+            const errorDetails = {
               sessionId: request.sessionId,
               subtype: message.subtype,
               isError: message.is_error,
               numTurns: message.num_turns,
-              permissionDenials: message.permission_denials
-            });
-            throw new ClaudeCodeError(`Claude Code execution failed: ${message.subtype}`);
+              permissionDenials: message.permission_denials,
+              usage: message.usage,
+              durationMs: message.duration_ms
+            };
+            logger.error('Claude Code execution failed', errorDetails);
+            
+            // Enhanced error message with context
+            const errorMessage = `Claude Code execution failed: ${message.subtype}. ` +
+              `Turns: ${message.num_turns}, Permission denials: ${message.permission_denials?.length || 0}`;
+            throw new ClaudeCodeError(errorMessage);
           }
         } else if (message.type === 'assistant') {
           logger.debug('Claude Code assistant message', {
@@ -273,11 +356,33 @@ class ClaudeCodeService {
 
       return response;
     } catch (error) {
-      logger.error('Error processing Claude Code request', { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        sessionId: request.sessionId
-      });
-      throw new ClaudeCodeError(error instanceof Error ? error.message : 'Unknown error');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorDetails = {
+        error: errorMessage,
+        sessionId: request.sessionId,
+        promptLength: request.prompt?.length || 0,
+        hasContext: !!request.context,
+        timestamp: new Date().toISOString(),
+        nodeVersion: process.version,
+        stack: error instanceof Error ? error.stack : undefined
+      };
+      
+      logger.error('Error processing Claude Code request', errorDetails);
+      
+      // Enhanced error message for different error types
+      if (errorMessage.includes('Claude Code process exited with code')) {
+        throw new ClaudeCodeError(
+          `Claude Code SDK process error: ${errorMessage}. ` +
+          'This may be due to Node.js/Bun compatibility issues or missing dependencies.'
+        );
+      } else if (errorMessage.includes('spawn') || errorMessage.includes('ENOENT')) {
+        throw new ClaudeCodeError(
+          `Claude Code executable not found or cannot be spawned: ${errorMessage}. ` +
+          'Please ensure Claude Code CLI is properly installed.'
+        );
+      } else {
+        throw new ClaudeCodeError(errorMessage);
+      }
     }
   }
 
@@ -295,7 +400,10 @@ class ClaudeCodeService {
       const publicDir = process.cwd() + '/public';
       const options: any = {
         cwd: publicDir,
-        permissionMode: 'bypassPermissions'
+        permissionMode: 'bypassPermissions',
+        // Force using Node.js instead of Bun to avoid compatibility issues
+        executable: 'node',
+        executableArgs: []
       };
       
       if (request.context) {
