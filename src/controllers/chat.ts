@@ -26,7 +26,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { ChatCompletionRequest } from '../types';
-import { claudeCodeService } from '../services';
+import { claudeCodeService, claudeApiService } from '../services';
 import { 
   transformOpenAIToClaude, 
   transformClaudeToOpenAI, 
@@ -56,6 +56,10 @@ router.post('/completions',
       const claudeRequest = transformOpenAIToClaude(request);
       claudeRequest.sessionId = requestId;
 
+      // Choose service based on model
+      const isClaudeApiModel = request.model === 'claude-4-sonnet';
+      const service = isClaudeApiModel ? claudeApiService : claudeCodeService;
+
       if (request.stream) {
         res.setHeader('Content-Type', 'text/plain');
         res.setHeader('Cache-Control', 'no-cache');
@@ -64,7 +68,7 @@ router.post('/completions',
         res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
 
         try {
-          const streamGenerator = claudeCodeService.processStreamRequest(claudeRequest);
+          const streamGenerator = service.processStreamRequest(claudeRequest);
           
           for await (const chunk of streamGenerator) {
             if (chunk.type === 'content') {
@@ -84,6 +88,8 @@ router.post('/completions',
         } catch (error) {
           logger.error('Error in streaming response', { 
             requestId, 
+            model: request.model,
+            service: isClaudeApiModel ? 'claude-api' : 'claude-code',
             error: error instanceof Error ? error.message : 'Unknown error' 
           });
           const errorChunk = createStreamChunk(
@@ -98,11 +104,13 @@ router.post('/completions',
 
         res.end();
       } else {
-        const claudeResponse = await claudeCodeService.processRequest(claudeRequest);
+        const claudeResponse = await service.processRequest(claudeRequest);
         const openaiResponse = transformClaudeToOpenAI(claudeResponse, request, requestId);
 
         logger.info('Chat completion successful', {
           requestId,
+          model: request.model,
+          service: isClaudeApiModel ? 'claude-api' : 'claude-code',
           responseLength: claudeResponse.response.length,
           tokensUsed: claudeResponse.metadata?.tokensUsed
         });

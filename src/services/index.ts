@@ -24,3 +24,4 @@
  */
 
 export { default as claudeCodeService } from './claudeCodeService';
+export { default as claudeApiService } from './claudeApiService';
