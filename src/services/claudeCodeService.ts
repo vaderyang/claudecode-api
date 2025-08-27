@@ -358,34 +358,6 @@ class ClaudeCodeService {
       return response;
     }, `processRequest for session ${request.sessionId}`);
   }
-  
-  private handleProcessError(error: any, sessionId?: string): never {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const errorDetails = {
-      error: errorMessage,
-      sessionId,
-      timestamp: new Date().toISOString(),
-      nodeVersion: process.version,
-      stack: error instanceof Error ? error.stack : undefined
-    };
-    
-    logger.error('Error processing Claude Code request', errorDetails);
-    
-    // Enhanced error message for different error types
-    if (errorMessage.includes('Claude Code process exited with code')) {
-      throw new ClaudeCodeError(
-        `Claude Code SDK process error: ${errorMessage}. ` +
-        'This may be due to Node.js/Bun compatibility issues or missing dependencies.'
-      );
-    } else if (errorMessage.includes('spawn') || errorMessage.includes('ENOENT')) {
-      throw new ClaudeCodeError(
-        `Claude Code executable not found or cannot be spawned: ${errorMessage}. ` +
-        'Please ensure Claude Code CLI is properly installed.'
-      );
-    } else {
-      throw new ClaudeCodeError(errorMessage);
-    }
-  }
 
   async *processStreamRequest(request: ClaudeCodeRequest, enableReasoning: boolean = false): AsyncGenerator<ClaudeCodeStreamResponse, void, unknown> {
     // Wrap the streaming operation with authentication retry logic
