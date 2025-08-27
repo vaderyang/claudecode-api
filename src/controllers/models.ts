@@ -32,93 +32,12 @@ const router = Router();
 
 const availableModels: Model[] = [
   {
-    id: 'claude-code-v1',
+    id: 'claudecode-v1',
     object: 'model',
     created: Math.floor(Date.now() / 1000),
     owned_by: 'claude-code',
     permission: [],
-    root: 'claude-code-v1',
-    parent: null
-  },
-  {
-    id: 'gpt-3.5-turbo',
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: 'claude-code',
-    permission: [],
-    root: 'gpt-3.5-turbo',
-    parent: null
-  },
-  {
-    id: 'gpt-4',
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: 'claude-code',
-    permission: [],
-    root: 'gpt-4',
-    parent: null
-  },
-  {
-    id: 'gpt-4-turbo',
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: 'claude-code',
-    permission: [],
-    root: 'gpt-4-turbo',
-    parent: null
-  },
-  {
-    id: 'gpt-4o',
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: 'claude-code',
-    permission: [],
-    root: 'gpt-4o',
-    parent: null
-  },
-  {
-    id: 'gpt-4o-mini',
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: 'claude-code',
-    permission: [],
-    root: 'gpt-4o-mini',
-    parent: null
-  },
-  {
-    id: 'o1',
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: 'claude-code',
-    permission: [],
-    root: 'o1',
-    parent: null
-  },
-  {
-    id: 'o1-mini',
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: 'claude-code',
-    permission: [],
-    root: 'o1-mini',
-    parent: null
-  },
-  {
-    id: 'o3',
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: 'claude-code',
-    permission: [],
-    root: 'o3',
-    parent: null
-  },
-  {
-    id: 'o3-mini',
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: 'claude-code',
-    permission: [],
-    root: 'o3-mini',
+    root: 'claudecode-v1',
     parent: null
   }
 ];

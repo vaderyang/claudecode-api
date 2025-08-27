@@ -26,7 +26,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { ChatCompletionRequest } from '../types';
-import { claudeCodeService } from '../services';
+import { claudeCodeService, claudeApiService } from '../services';
 import { 
   transformOpenAIToClaude, 
   transformClaudeToOpenAI, 
@@ -57,6 +57,10 @@ router.post('/completions',
       const claudeRequest = transformOpenAIToClaude(request);
       claudeRequest.sessionId = requestId;
 
+      // Choose service based on model
+      const isClaudeApiModel = request.model === 'claude-4-sonnet';
+      const service = isClaudeApiModel ? claudeApiService : claudeCodeService;
+
       if (request.stream) {
         res.setHeader('Content-Type', 'text/plain');
         res.setHeader('Cache-Control', 'no-cache');
@@ -65,44 +69,52 @@ router.post('/completions',
         res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
 
         try {
-          // PHASE 1: Stream instant reasoning tips while Claude Code initializes
-          logger.info('Phase 1: Streaming instant reasoning tips', { requestId });
+          let streamGenerator;
           
-          // Get user prompt from the latest message
-          const userMessages = request.messages.filter(msg => msg.role === 'user');
-          const lastMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
-          const latestPrompt = lastMessage ? lastMessage.content : '';
-          
-          // Stream progressive reasoning tips immediately
-          const instantReasoningGenerator = generateProgressiveReasoningTips(latestPrompt);
-          
-          // Start Claude Code processing in parallel (don't await yet)
-          const claudeCodePromise = (async () => {
-            logger.info('Phase 2: Starting Claude Code SDK processing', { requestId });
-            return claudeCodeService.processStreamRequest(claudeRequest, true);
-          })();
-          
-          // Stream instant reasoning tips first
-          for await (const tip of instantReasoningGenerator) {
-            const reasoningText = `💭 ${tip.summary}`;
-            const reasoningChunk = createStreamChunk(reasoningText, requestId, request.model);
-            res.write(formatSSE(reasoningChunk));
+          // Choose processing approach based on service type
+          if (!isClaudeApiModel) {
+            // PHASE 1: Stream instant reasoning tips while Claude Code initializes
+            logger.info('Phase 1: Streaming instant reasoning tips', { requestId });
+            
+            // Get user prompt from the latest message
+            const userMessages = request.messages.filter(msg => msg.role === 'user');
+            const lastMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
+            const latestPrompt = lastMessage ? lastMessage.content : '';
+            
+            // Stream progressive reasoning tips immediately
+            const instantReasoningGenerator = generateProgressiveReasoningTips(latestPrompt);
+            
+            // Start Claude Code processing in parallel (don't await yet)
+            const claudeCodePromise = (async () => {
+              logger.info('Phase 2: Starting Claude Code SDK processing', { requestId });
+              return claudeCodeService.processStreamRequest(claudeRequest, true);
+            })();
+            
+            // Stream instant reasoning tips first
+            for await (const tip of instantReasoningGenerator) {
+              const reasoningText = `💭 ${tip.summary}`;
+              const reasoningChunk = createStreamChunk(reasoningText, requestId, request.model);
+              res.write(formatSSE(reasoningChunk));
+            }
+            
+            // Add contextual reasoning tip
+            const contextualTip = generateContextualReasoningTip(latestPrompt);
+            const contextualText = `💭 ${contextualTip.summary}`;
+            const contextualChunk = createStreamChunk(contextualText, requestId, request.model);
+            res.write(formatSSE(contextualChunk));
+            
+            // PHASE 2: Process actual Claude Code response
+            logger.info('Phase 2: Processing Claude Code response', { requestId });
+            streamGenerator = await claudeCodePromise;
+            
+            // Add transition message
+            const transitionText = `\n\n🔄 **Starting Claude Code processing...**\n\n`;
+            const transitionChunk = createStreamChunk(transitionText, requestId, request.model);
+            res.write(formatSSE(transitionChunk));
+          } else {
+            // For Claude API service, use direct streaming without instant reasoning
+            streamGenerator = service.processStreamRequest(claudeRequest);
           }
-          
-          // Add contextual reasoning tip
-          const contextualTip = generateContextualReasoningTip(latestPrompt);
-          const contextualText = `💭 ${contextualTip.summary}`;
-          const contextualChunk = createStreamChunk(contextualText, requestId, request.model);
-          res.write(formatSSE(contextualChunk));
-          
-          // PHASE 2: Process actual Claude Code response
-          logger.info('Phase 2: Processing Claude Code response', { requestId });
-          const streamGenerator = await claudeCodePromise;
-          
-          // Add transition message
-          const transitionText = `\n\n🔄 **Starting Claude Code processing...**\n\n`;
-          const transitionChunk = createStreamChunk(transitionText, requestId, request.model);
-          res.write(formatSSE(transitionChunk));
           
           for await (const chunk of streamGenerator) {
             if (chunk.type === 'content') {
@@ -127,6 +139,8 @@ router.post('/completions',
         } catch (error) {
           logger.error('Error in streaming response', { 
             requestId, 
+            model: request.model,
+            service: isClaudeApiModel ? 'claude-api' : 'claude-code',
             error: error instanceof Error ? error.message : 'Unknown error' 
           });
           const errorChunk = createStreamChunk(
@@ -141,11 +155,13 @@ router.post('/completions',
 
         res.end();
       } else {
-        const claudeResponse = await claudeCodeService.processRequest(claudeRequest);
+        const claudeResponse = await service.processRequest(claudeRequest);
         const openaiResponse = transformClaudeToOpenAI(claudeResponse, request, requestId);
 
         logger.info('Chat completion successful', {
           requestId,
+          model: request.model,
+          service: isClaudeApiModel ? 'claude-api' : 'claude-code',
           responseLength: claudeResponse.response.length,
           tokensUsed: claudeResponse.metadata?.tokensUsed
         });
