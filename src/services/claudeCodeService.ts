@@ -27,6 +27,7 @@ import { query } from '@anthropic-ai/claude-code';
 import { ClaudeCodeRequest, ClaudeCodeResponse, ClaudeCodeStreamResponse, FileContent } from '../types/claude';
 import { ClaudeCodeError } from '../utils/errors';
 import logger from '../utils/logger';
+import authManager from './claudeCodeAuthManager';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -41,7 +42,7 @@ class ClaudeCodeService {
   }
 
   async processRequest(request: ClaudeCodeRequest): Promise<ClaudeCodeResponse> {
-    try {
+    return await authManager.handleAuthError(async () => {
       this.validateSetup();
 
       logger.info('Processing Claude Code request', { 
@@ -272,16 +273,69 @@ class ClaudeCodeService {
       }
 
       return response;
-    } catch (error) {
-      logger.error('Error processing Claude Code request', { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        sessionId: request.sessionId
-      });
-      throw new ClaudeCodeError(error instanceof Error ? error.message : 'Unknown error');
-    }
+    }, `processRequest for session ${request.sessionId}`);
   }
 
   async *processStreamRequest(request: ClaudeCodeRequest, enableReasoning: boolean = false): AsyncGenerator<ClaudeCodeStreamResponse, void, unknown> {
+    // Wrap the streaming operation with authentication retry logic
+    try {
+      yield* await this.processStreamRequestWithAuth(request, enableReasoning);
+    } catch (error) {
+      if (authManager.isAuthenticationError(error)) {
+        logger.warn('Authentication error in streaming request, attempting refresh', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          sessionId: request.sessionId
+        });
+
+        if (authManager.shouldRetryRequest(error)) {
+          const refreshResult = await authManager.refreshAuthentication();
+          
+          if (refreshResult.success) {
+            logger.info('Authentication refreshed, retrying streaming request', {
+              sessionId: request.sessionId
+            });
+            
+            // Retry the operation once after successful refresh
+            try {
+              yield* await this.processStreamRequestWithAuth(request, enableReasoning);
+              return;
+            } catch (retryError) {
+              logger.error('Streaming request failed even after authentication refresh', {
+                error: retryError instanceof Error ? retryError.message : 'Unknown error',
+                sessionId: request.sessionId
+              });
+              
+              yield {
+                type: 'error',
+                data: `Authentication refresh succeeded but request still failed: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
+                sessionId: request.sessionId
+              };
+              return;
+            }
+          } else {
+            yield {
+              type: 'error',
+              data: `Authentication refresh failed: ${refreshResult.message}`,
+              sessionId: request.sessionId
+            };
+            return;
+          }
+        } else {
+          yield {
+            type: 'error',
+            data: `Authentication failed and retry not advisable: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            sessionId: request.sessionId
+          };
+          return;
+        }
+      } else {
+        // Re-throw non-authentication errors
+        throw error;
+      }
+    }
+  }
+
+  private async *processStreamRequestWithAuth(request: ClaudeCodeRequest, enableReasoning: boolean = false): AsyncGenerator<ClaudeCodeStreamResponse, void, unknown> {
     try {
       this.validateSetup();
 

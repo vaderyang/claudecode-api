@@ -26,6 +26,7 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../config';
 import logger from '../utils/logger';
+import { authManager } from '../services';
 
 const router = Router();
 
@@ -43,6 +44,7 @@ router.get('/', (_req: Request, res: Response): void => {
       database: 'not_applicable',
       cache: 'not_applicable'
     },
+    authentication: authManager.getAuthStatus(),
     memory: {
       used: Math.round((process.memoryUsage().heapUsed / 1024 / 1024) * 100) / 100,
       total: Math.round((process.memoryUsage().heapTotal / 1024 / 1024) * 100) / 100,
@@ -69,6 +71,44 @@ router.get('/live', (_req: Request, res: Response): void => {
     status: 'alive',
     timestamp: new Date().toISOString()
   });
+});
+
+router.get('/auth', (_req: Request, res: Response): void => {
+  logger.debug('Authentication status endpoint accessed');
+  
+  const authStatus = authManager.getAuthStatus();
+  
+  res.json({
+    status: authStatus.isAuthenticated ? 'authenticated' : 'unauthenticated',
+    timestamp: new Date().toISOString(),
+    authentication: authStatus
+  });
+});
+
+router.post('/auth/refresh', async (_req: Request, res: Response): Promise<void> => {
+  logger.info('Manual authentication refresh requested');
+  
+  try {
+    const refreshResult = await authManager.refreshAuthentication();
+    
+    res.json({
+      status: refreshResult.success ? 'refreshed' : 'failed',
+      timestamp: new Date().toISOString(),
+      result: refreshResult,
+      authentication: authManager.getAuthStatus()
+    });
+  } catch (error) {
+    logger.error('Error during manual authentication refresh', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    
+    res.status(500).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Unknown error',
+      authentication: authManager.getAuthStatus()
+    });
+  }
 });
 
 export default router;

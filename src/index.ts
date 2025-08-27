@@ -31,7 +31,7 @@ const startServer = async (): Promise<void> => {
   try {
     validateConfig();
     
-    const server = app.listen(config.port, () => {
+    const server = app.listen(config.port, '0.0.0.0', () => {
       logger.info(`Claude Code API server starting`, {
         port: config.port,
         environment: config.nodeEnv,
