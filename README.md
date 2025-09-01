@@ -431,6 +431,8 @@ The WebUI uses SQLite for data persistence:
 - Tables: `api_keys`, `request_logs`, `analytics`, `webui_users`
 - Automatic schema initialization on startup
 
+**⚠️ Security Note**: Database files are automatically ignored by git (`.gitignore`) as they contain sensitive user data, credentials, and API keys. Never commit database files to version control.
+
 ### Adding New Endpoints
 
 1. Create route handler in `src/controllers/`
