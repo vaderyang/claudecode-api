@@ -1,0 +1,77 @@
+#!/usr/bin/env node
+
+import { Command } from 'commander';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const program = new Command();
+
+program
+  .name('claude')
+  .description('Claude CLI Chat Client')
+  .version('1.0.0');
+
+program
+  .command('chat')
+  .description('Start interactive chat')
+  .action(() => {
+    const chatProcess = spawn('node', [path.join(__dirname, 'chat.js')], {
+      stdio: 'inherit'
+    });
+    
+    chatProcess.on('exit', (code) => {
+      process.exit(code);
+    });
+  });
+
+program
+  .command('test')
+  .description('Run API tests')
+  .argument('[message]', 'Test message')
+  .option('-u, --url <url>', 'API base URL', 'http://localhost:3000')
+  .option('-k, --key <key>', 'API key', 'your-api-key-here')
+  .option('-m, --model <model>', 'Model to use', 'claude-sonnet')
+  .option('-s, --stream', 'Enable streaming', false)
+  .option('-r, --reasoning', 'Enable reasoning', false)
+  .option('-a, --api <api>', 'API type (chat|responses)', 'responses')
+  .action((message, options) => {
+    const args = [path.join(__dirname, 'index.js')];
+    
+    // Add options
+    if (options.url) args.push('--url', options.url);
+    if (options.key) args.push('--key', options.key);
+    if (options.model) args.push('--model', options.model);
+    if (options.stream) args.push('--stream');
+    if (options.reasoning) args.push('--reasoning');
+    if (options.api) args.push('--api', options.api);
+    
+    if (message) {
+      args.push('test', message);
+    } else {
+      args.push('health');
+    }
+    
+    const testProcess = spawn('node', args, {
+      stdio: 'inherit'
+    });
+    
+    testProcess.on('exit', (code) => {
+      process.exit(code);
+    });
+  });
+
+// Default to chat if no command specified
+if (process.argv.length === 2) {
+  const chatProcess = spawn('node', [path.join(__dirname, 'chat.js')], {
+    stdio: 'inherit'
+  });
+  
+  chatProcess.on('exit', (code) => {
+    process.exit(code);
+  });
+} else {
+  program.parse();
+}
