@@ -94,20 +94,16 @@ export const validateChatCompletionRequest = (req: Request, res: Response, next:
 };
 
 export const validateResponsesRequest = (req: Request, res: Response, next: NextFunction): void => {
-  const { model, messages, input } = req.body;
+  const { messages, input } = req.body;
+  let { model } = req.body;
 
   // Debug logging to see what's actually being sent
   console.log('Responses API request body:', JSON.stringify(req.body, null, 2));
 
+  // Set default model if not provided
   if (!model) {
-    res.status(400).json({
-      error: {
-        message: 'Model is required',
-        type: 'invalid_request_error',
-        param: 'model'
-      }
-    });
-    return;
+    model = 'claudecode-v1';
+    req.body.model = model;
   }
 
   // Support both 'messages' and 'input' formats

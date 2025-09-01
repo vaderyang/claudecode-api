@@ -29,7 +29,6 @@ import { ChatCompletionRequest } from '../types';
 import { claudeCodeService, claudeApiService } from '../services';
 import { 
   transformOpenAIToClaude, 
-  transformClaudeToOpenAI, 
   createStreamChunk, 
   formatSSE 
 } from '../utils/transformers';
@@ -73,67 +72,92 @@ router.post('/completions',
           
           // Choose processing approach based on service type
           if (!isClaudeApiModel) {
-            // PHASE 1: Stream instant reasoning tips while Claude Code initializes
-            logger.info('Phase 1: Streaming instant reasoning tips', { requestId });
+            // Collect all reasoning content first
+            let allReasoningContent = '';
             
             // Get user prompt from the latest message
             const userMessages = request.messages.filter(msg => msg.role === 'user');
             const lastMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
             const latestPrompt = lastMessage ? lastMessage.content : '';
             
-            // Stream progressive reasoning tips immediately
+            // Collect instant reasoning tips
             const instantReasoningGenerator = generateProgressiveReasoningTips(latestPrompt);
-            
-            // Start Claude Code processing in parallel (don't await yet)
-            const claudeCodePromise = (async () => {
-              logger.info('Phase 2: Starting Claude Code SDK processing', { requestId });
-              return claudeCodeService.processStreamRequest(claudeRequest, true);
-            })();
-            
-            // Stream instant reasoning tips first
             for await (const tip of instantReasoningGenerator) {
-              const reasoningText = `💭 ${tip.summary}`;
-              const reasoningChunk = createStreamChunk(reasoningText, requestId, request.model);
-              res.write(formatSSE(reasoningChunk));
+              allReasoningContent += `💭 ${tip.summary}`;
             }
             
             // Add contextual reasoning tip
             const contextualTip = generateContextualReasoningTip(latestPrompt);
-            const contextualText = `💭 ${contextualTip.summary}`;
-            const contextualChunk = createStreamChunk(contextualText, requestId, request.model);
-            res.write(formatSSE(contextualChunk));
-            
-            // PHASE 2: Process actual Claude Code response
-            logger.info('Phase 2: Processing Claude Code response', { requestId });
-            streamGenerator = await claudeCodePromise;
+            allReasoningContent += `💭 ${contextualTip.summary}`;
             
             // Add transition message
-            const transitionText = `\n\n🔄 **Starting Claude Code processing...**\n\n`;
-            const transitionChunk = createStreamChunk(transitionText, requestId, request.model);
-            res.write(formatSSE(transitionChunk));
+            allReasoningContent += `\n\n🔄 **Starting Claude Code processing...**\n\n`;
+            
+            // Start Claude Code processing
+            logger.info('Starting Claude Code SDK processing', { requestId });
+            streamGenerator = claudeCodeService.processStreamRequest(claudeRequest, true);
+            
+            // Collect Claude Code reasoning
+            const reasoningBuffer: string[] = [];
+            let contentStarted = false;
+            
+            for await (const chunk of streamGenerator) {
+              if (chunk.type === 'reasoning' && !contentStarted) {
+                reasoningBuffer.push(chunk.reasoning?.summary || 'Processing...');
+              } else if (chunk.type === 'content') {
+                // First content chunk - send all collected reasoning as single <think> block
+                if (!contentStarted) {
+                  contentStarted = true;
+                  
+                  // Add all Claude Code reasoning to the buffer
+                  if (reasoningBuffer.length > 0) {
+                    allReasoningContent += reasoningBuffer.join(' ');
+                  }
+                  
+                  // Send all reasoning as one <think> block
+                  if (allReasoningContent) {
+                    const thinkChunk = createStreamChunk(`<think>${allReasoningContent}</think>`, requestId, request.model);
+                    res.write(formatSSE(thinkChunk));
+                  }
+                }
+                
+                // Send content chunk
+                const streamChunk = createStreamChunk(chunk.data, requestId, request.model);
+                res.write(formatSSE(streamChunk));
+              } else if (chunk.type === 'error') {
+                const errorChunk = createStreamChunk(`Error: ${chunk.data}`, requestId, request.model, true);
+                res.write(formatSSE(errorChunk));
+                break;
+              } else if (chunk.type === 'done') {
+                const doneChunk = createStreamChunk('', requestId, request.model, true);
+                res.write(formatSSE(doneChunk));
+                res.write('data: [DONE]\n\n');
+                break;
+              }
+            }
           } else {
             // For Claude API service, use direct streaming without instant reasoning
             streamGenerator = service.processStreamRequest(claudeRequest);
-          }
-          
-          for await (const chunk of streamGenerator) {
-            if (chunk.type === 'content') {
-              const streamChunk = createStreamChunk(chunk.data, requestId, request.model);
-              res.write(formatSSE(streamChunk));
-            } else if (chunk.type === 'reasoning') {
-              // Stream additional reasoning information from Claude Code
-              const reasoningText = `💭 ${chunk.reasoning?.summary || 'Processing...'}`;
-              const reasoningChunk = createStreamChunk(reasoningText, requestId, request.model);
-              res.write(formatSSE(reasoningChunk));
-            } else if (chunk.type === 'error') {
-              const errorChunk = createStreamChunk(`Error: ${chunk.data}`, requestId, request.model, true);
-              res.write(formatSSE(errorChunk));
-              break;
-            } else if (chunk.type === 'done') {
-              const doneChunk = createStreamChunk('', requestId, request.model, true);
-              res.write(formatSSE(doneChunk));
-              res.write('data: [DONE]\n\n');
-              break;
+            
+            for await (const chunk of streamGenerator) {
+              if (chunk.type === 'content') {
+                const streamChunk = createStreamChunk(chunk.data, requestId, request.model);
+                res.write(formatSSE(streamChunk));
+              } else if (chunk.type === 'reasoning') {
+                // For chat completions API, embed reasoning as <think> tags in the text stream
+                const reasoningText = `<think>${chunk.reasoning?.summary || 'Processing...'}</think>`;
+                const reasoningChunk = createStreamChunk(reasoningText, requestId, request.model);
+                res.write(formatSSE(reasoningChunk));
+              } else if (chunk.type === 'error') {
+                const errorChunk = createStreamChunk(`Error: ${chunk.data}`, requestId, request.model, true);
+                res.write(formatSSE(errorChunk));
+                break;
+              } else if (chunk.type === 'done') {
+                const doneChunk = createStreamChunk('', requestId, request.model, true);
+                res.write(formatSSE(doneChunk));
+                res.write('data: [DONE]\n\n');
+                break;
+              }
             }
           }
         } catch (error) {
@@ -155,15 +179,90 @@ router.post('/completions',
 
         res.end();
       } else {
-        const claudeResponse = await service.processRequest(claudeRequest);
-        const openaiResponse = transformClaudeToOpenAI(claudeResponse, request, requestId);
+        // For non-streaming, collect all reasoning first, then content
+        let allReasoningContent = '';
+        let actualContent = '';
+        let fullContent = '';
+        let totalTokensUsed = 0;
+        
+        try {
+          if (isClaudeApiModel) {
+            // For Claude API, just collect content
+            const streamGenerator = service.processStreamRequest(claudeRequest);
+            for await (const chunk of streamGenerator) {
+              if (chunk.type === 'content') {
+                actualContent += chunk.data;
+              } else if (chunk.type === 'reasoning' && chunk.reasoning?.summary) {
+                allReasoningContent += chunk.reasoning.summary;
+              }
+            }
+          } else {
+            // For Claude Code, collect instant reasoning + Claude Code reasoning
+            const userMessages = request.messages.filter(msg => msg.role === 'user');
+            const lastMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
+            const latestPrompt = lastMessage ? lastMessage.content : '';
+            
+            // Collect instant reasoning tips
+            const instantReasoningGenerator = generateProgressiveReasoningTips(latestPrompt);
+            for await (const tip of instantReasoningGenerator) {
+              allReasoningContent += `💭 ${tip.summary}`;
+            }
+            
+            // Add contextual reasoning tip
+            const contextualTip = generateContextualReasoningTip(latestPrompt);
+            allReasoningContent += `💭 ${contextualTip.summary}`;
+            
+            // Add transition message
+            allReasoningContent += `\n\n🔄 **Starting Claude Code processing...**\n\n`;
+            
+            // Collect Claude Code content and reasoning
+            const streamGenerator = claudeCodeService.processStreamRequest(claudeRequest, true);
+            for await (const chunk of streamGenerator) {
+              if (chunk.type === 'content') {
+                actualContent += chunk.data;
+              } else if (chunk.type === 'reasoning' && chunk.reasoning?.summary) {
+                allReasoningContent += chunk.reasoning.summary;
+              }
+            }
+          }
+          
+          // Combine reasoning and content
+          if (allReasoningContent) {
+            fullContent += `<think>${allReasoningContent}</think>`;
+          }
+          fullContent += actualContent;
+          
+        } catch (error) {
+          logger.error('Error in non-streaming processing', { requestId, error });
+          throw error;
+        }
+
+        const openaiResponse = {
+          id: requestId,
+          object: 'chat.completion' as const,
+          created: Math.floor(Date.now() / 1000),
+          model: request.model || 'claude-sonnet',
+          choices: [{
+            index: 0,
+            message: {
+              role: 'assistant' as const,
+              content: fullContent
+            },
+            finish_reason: 'stop' as const
+          }],
+          usage: {
+            prompt_tokens: totalTokensUsed || 100,
+            completion_tokens: Math.floor(fullContent.length / 4),
+            total_tokens: (totalTokensUsed || 100) + Math.floor(fullContent.length / 4)
+          }
+        };
 
         logger.info('Chat completion successful', {
           requestId,
           model: request.model,
           service: isClaudeApiModel ? 'claude-api' : 'claude-code',
-          responseLength: claudeResponse.response.length,
-          tokensUsed: claudeResponse.metadata?.tokensUsed
+          responseLength: fullContent.length,
+          tokensUsed: totalTokensUsed
         });
 
         res.json(openaiResponse);

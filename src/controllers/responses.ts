@@ -38,6 +38,11 @@ router.post('/', authenticateApiKey, validateResponsesRequest, async (req: Reque
   const request = req.body as ResponseRequest;
   const responseId = uuidv4();
 
+  // Set default model if not provided
+  if (!request.model) {
+    request.model = 'claudecode-v1';
+  }
+
   logger.info('Processing Responses API request', {
     responseId,
     model: request.model,
