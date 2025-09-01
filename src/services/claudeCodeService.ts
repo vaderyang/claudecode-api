@@ -483,6 +483,18 @@ class ClaudeCodeService {
             messageDetails: JSON.stringify(message, null, 2)
           });
 
+          // Enhanced debugging for tool messages
+          if (message.type === 'assistant' && 'content' in message && Array.isArray(message.content)) {
+            const toolUseContent = message.content.filter(c => c.type === 'tool_use');
+            if (toolUseContent.length > 0) {
+              logger.info('Found tool_use content in assistant message', {
+                sessionId: request.sessionId,
+                toolCount: toolUseContent.length,
+                tools: toolUseContent.map(t => ({ name: t.name, id: t.id }))
+              });
+            }
+          }
+
           if (message.type === 'result') {
             logger.info('Claude Code streaming result message', {
               sessionId: request.sessionId,
@@ -637,6 +649,43 @@ class ClaudeCodeService {
                 }
               };
             }
+          } else if ((message as any).type === 'tool_result' && enableReasoning && 'tool_use_id' in message) {
+            // Handle tool result messages to show completion status
+            logger.info('Claude Code tool result message found!', {
+              sessionId: request.sessionId,
+              toolUseId: (message as any).tool_use_id,
+              isError: (message as any).is_error,
+              content: 'content' in message ? (message as any).content : undefined
+            });
+            
+            // Extract tool completion information
+            if ((message as any).tool_use_id) {
+              const toolResultSummary = this.extractReasoningFromToolResult(message as any);
+              if (toolResultSummary) {
+                yield {
+                  type: 'reasoning',
+                  data: '',
+                  sessionId: request.sessionId,
+                  reasoning: {
+                    type: 'progress', // Use existing type for compatibility
+                    summary: toolResultSummary,
+                    details: {
+                      toolUseId: (message as any).tool_use_id,
+                      isError: (message as any).is_error,
+                      hasContent: !!((message as any).content)
+                    }
+                  }
+                };
+              }
+            }
+          } else {
+            // Log any other message types we're not handling
+            logger.debug('Unhandled message type in streaming', {
+              sessionId: request.sessionId,
+              messageType: (message as any).type,
+              hasToolUseId: 'tool_use_id' in message,
+              messageKeys: Object.keys(message)
+            });
           }
         }
 
@@ -657,6 +706,25 @@ class ClaudeCodeService {
             files: Array.from(modifiedFiles)
           });
           
+          // Stream reasoning about detected file operations
+          if (enableReasoning) {
+            for (const fileName of modifiedFiles) {
+              yield {
+                type: 'reasoning',
+                data: '',
+                sessionId: request.sessionId,
+                reasoning: {
+                  type: 'progress',
+                  summary: `📝 Creating file: ${fileName}`,
+                  details: {
+                    fileName: fileName,
+                    operation: 'create'
+                  }
+                }
+              };
+            }
+          }
+          
           fileContents = await this.getFileContents(modifiedFiles, beforeSnapshot);
           
           logger.info('Read file contents in streaming', {
@@ -664,6 +732,26 @@ class ClaudeCodeService {
             contentCount: fileContents.length,
             totalSize: fileContents.reduce((sum, file) => sum + file.size, 0)
           });
+          
+          // Stream completion reasoning for file operations
+          if (enableReasoning && fileContents.length > 0) {
+            for (const file of fileContents) {
+              yield {
+                type: 'reasoning',
+                data: '',
+                sessionId: request.sessionId,
+                reasoning: {
+                  type: 'progress',
+                  summary: `✅ Successfully ${file.operation} file: ${file.filename}`,
+                  details: {
+                    fileName: file.filename,
+                    operation: file.operation,
+                    size: file.size
+                  }
+                }
+              };
+            }
+          }
           
           // Stream file contents as code blocks
           if (fileContents.length > 0) {
@@ -704,6 +792,29 @@ class ClaudeCodeService {
               changedFiles: Array.from(changedFiles)
             });
             
+            // Stream reasoning about detected file operations
+            if (enableReasoning) {
+              for (const fileName of changedFiles) {
+                const before = beforeSnapshot.get(fileName);
+                const operation = !before || !before.exists ? 'created' : 'updated';
+                const operationIcon = operation === 'created' ? '📝' : '✏️';
+                
+                yield {
+                  type: 'reasoning',
+                  data: '',
+                  sessionId: request.sessionId,
+                  reasoning: {
+                    type: 'progress',
+                    summary: `${operationIcon} ${operation === 'created' ? 'Creating' : 'Updating'} file: ${fileName}`,
+                    details: {
+                      fileName: fileName,
+                      operation: operation
+                    }
+                  }
+                };
+              }
+            }
+            
             fileContents = await this.getFileContents(changedFiles, beforeSnapshot);
             
             logger.info('Read contents of changed files in streaming', {
@@ -711,6 +822,26 @@ class ClaudeCodeService {
               contentCount: fileContents.length,
               totalSize: fileContents.reduce((sum, file) => sum + file.size, 0)
             });
+            
+            // Stream completion reasoning for file operations
+            if (enableReasoning && fileContents.length > 0) {
+              for (const file of fileContents) {
+                yield {
+                  type: 'reasoning',
+                  data: '',
+                  sessionId: request.sessionId,
+                  reasoning: {
+                    type: 'progress',
+                    summary: `✅ Successfully ${file.operation} file: ${file.filename} (${file.size} bytes)`,
+                    details: {
+                      fileName: file.filename,
+                      operation: file.operation,
+                      size: file.size
+                    }
+                  }
+                };
+              }
+            }
             
             // Stream the file blocks as content
             if (fileContents.length > 0) {
@@ -1001,7 +1132,20 @@ class ClaudeCodeService {
     } else if (subtype === 'session_start') {
       return 'Starting new session and initializing workspace...';
     } else if (tools && Array.isArray(tools) && tools.length > 0) {
-      return `Configuring available tools: ${tools.map(tool => tool.name || tool.type).join(', ')}...`;
+      // Handle different tool formats that might come from Claude Code SDK
+      const toolNames = tools.map(tool => {
+        if (typeof tool === 'string') return tool;
+        if (tool && typeof tool === 'object') {
+          return tool.name || tool.type || tool.function?.name || 'unknown';
+        }
+        return 'unknown';
+      }).filter(name => name !== 'unknown' && name.trim() !== '');
+      
+      if (toolNames.length > 0) {
+        return `Configuring ${toolNames.length} tools: ${toolNames.slice(0, 3).join(', ')}${toolNames.length > 3 ? '...' : ''}`;
+      } else {
+        return `Configuring ${tools.length} development tools...`;
+      }
     } else {
       return `Processing system configuration (${subtype})...`;
     }
@@ -1016,37 +1160,117 @@ class ClaudeCodeService {
     }
 
     switch (toolName) {
+      case 'Write':
       case 'create_file':
-        const fileName = toolInput?.file_path || toolInput?.filename || 'unknown file';
-        return `Creating new file: ${fileName}...`;
+        const fileName = toolInput?.file_path || toolInput?.filename || 'new file';
+        return `📝 Creating file: ${fileName}`;
       
+      case 'Edit':
+      case 'MultiEdit':
       case 'edit_files':
         const fileCount = toolInput?.diffs?.length || 1;
-        const firstFile = toolInput?.diffs?.[0]?.file_path || 'files';
+        const firstFile = toolInput?.diffs?.[0]?.file_path || toolInput?.file_path || 'files';
         return fileCount === 1 
-          ? `Editing file: ${firstFile}...`
-          : `Editing ${fileCount} files starting with ${firstFile}...`;
+          ? `✏️ Editing file: ${firstFile}`
+          : `✏️ Editing ${fileCount} files starting with ${firstFile}`;
       
+      case 'Read':
       case 'read_files':
         const readFileCount = toolInput?.files?.length || 1;
-        return `Reading ${readFileCount} file${readFileCount === 1 ? '' : 's'}...`;
+        const readFileName = toolInput?.file_path || 'files';
+        return readFileCount === 1 
+          ? `📖 Reading file: ${readFileName}`
+          : `📖 Reading ${readFileCount} files`;
       
+      case 'Bash':
       case 'run_command':
         const command = toolInput?.command || 'command';
-        const shortCommand = command.length > 40 ? command.substring(0, 40) + '...' : command;
-        return `Executing command: ${shortCommand}`;
+        const shortCommand = command.length > 30 ? command.substring(0, 30) + '...' : command;
+        return `⚡ Running: ${shortCommand}`;
       
+      case 'Grep':
       case 'search_codebase':
-        const query = toolInput?.query || 'codebase';
-        return `Searching codebase for: ${query}...`;
+        const query = toolInput?.pattern || toolInput?.query || 'content';
+        return `🔍 Searching for: ${query}`;
       
-      case 'grep':
-        const searchTerms = toolInput?.queries?.join(', ') || 'text';
-        return `Searching for: ${searchTerms}...`;
+      case 'Glob':
+        const pattern = toolInput?.pattern || 'files';
+        return `📂 Finding files: ${pattern}`;
+        
+      case 'LS':
+        const path = toolInput?.path || 'directory';
+        return `📁 Listing directory: ${path}`;
+        
+      case 'Task':
+        const taskDesc = toolInput?.description || 'specialized task';
+        return `🤖 Delegating: ${taskDesc}`;
+        
+      case 'WebFetch':
+        const url = toolInput?.url || 'webpage';
+        return `🌐 Fetching: ${url}`;
+        
+      case 'WebSearch':
+        const searchQuery = toolInput?.query || 'information';
+        return `🔎 Web search: ${searchQuery}`;
       
       default:
-        return `Using tool: ${toolName}...`;
+        // Handle unknown tools gracefully
+        const displayName = toolName.replace(/([A-Z])/g, ' $1').trim();
+        return `🔧 Using ${displayName} tool`;
     }
+  }
+
+  /**
+   * Extract reasoning summary from tool result messages
+   */
+  private extractReasoningFromToolResult(message: any): string | null {
+    if (!message || message.type !== 'tool_result') {
+      return null;
+    }
+
+    // Handle error cases
+    if (message.is_error) {
+      return 'Tool execution failed - troubleshooting...';
+    }
+
+    // Try to extract meaningful information from the result
+    if (message.content) {
+      if (Array.isArray(message.content)) {
+        for (const content of message.content) {
+          if (content.type === 'text' && content.text) {
+            // Parse common tool result patterns
+            const text = content.text.toLowerCase();
+            
+            if (text.includes('created') && text.includes('file')) {
+              return 'Successfully created file ✅';
+            } else if (text.includes('updated') || text.includes('modified')) {
+              return 'Successfully updated file ✅';
+            } else if (text.includes('deleted') || text.includes('removed')) {
+              return 'Successfully deleted file ✅';
+            } else if (text.includes('found') && text.includes('results')) {
+              const matches = text.match(/(\d+)\s+results?/);
+              const count = matches ? matches[1] : 'multiple';
+              return `Found ${count} search results ✅`;
+            } else if (text.includes('command') && text.includes('executed')) {
+              return 'Command executed successfully ✅';
+            } else if (text.length > 0) {
+              // Generic success message
+              return 'Tool operation completed ✅';
+            }
+          }
+        }
+      } else if (typeof message.content === 'string') {
+        const text = message.content.toLowerCase();
+        if (text.includes('success') || text.includes('completed')) {
+          return 'Operation completed successfully ✅';
+        } else if (text.length > 0) {
+          return 'Tool operation finished ✅';
+        }
+      }
+    }
+
+    // Default success message
+    return 'Tool operation completed ✅';
   }
 
   /**

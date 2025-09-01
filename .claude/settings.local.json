@@ -10,9 +10,20 @@
       "WebSearch",
       "Bash(grep:*)",
       "Bash(npm run dev:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(bun run:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(npm start)",
+      "Bash(npm uninstall:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+    ]
   }
 }
