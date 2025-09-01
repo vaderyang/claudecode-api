@@ -1,0 +1,3 @@
+# This file ensures the public directory is created in git but keeps generated files ignored
+# The Claude Code SDK uses this directory for file operations and temporary files
+# Do not commit actual files from this directory - they are generated content
