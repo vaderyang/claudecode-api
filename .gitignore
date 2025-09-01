@@ -52,3 +52,12 @@ Thumbs.db
 # Temporary folders
 tmp/
 temp/
+
+# Database and data files
+data/
+*.sqlite
+*.db
+
+# WebUI specific ignores
+cookies.txt
+bun.lockb
