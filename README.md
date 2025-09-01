@@ -140,6 +140,13 @@ flowchart LR
 - ✅ Structured logging with Winston
 - ✅ Health check endpoints
 - ✅ TypeScript implementation with strict types
+- ✅ **Web Management Interface** - Full-featured dashboard at `/webui`
+  - 🔐 **Secure Authentication** - Role-based access control with bcrypt
+  - 📊 **Real-time Analytics** - Interactive charts and live monitoring
+  - 🔑 **API Key Management** - Create, manage, and track API keys
+  - 📋 **Request/Response Logs** - Comprehensive logging with advanced filtering
+  - ⚙️ **System Configuration** - Live configuration management
+  - 🚀 **Real-time Updates** - WebSocket-powered live data updates
 
 ## Quick Start
 
@@ -441,6 +448,67 @@ npm run typecheck
 ```bash
 mkdir logs
 ```
+
+## Web Management Interface
+
+The Claude Code API includes a comprehensive web management interface accessible at `/webui`. This provides:
+
+### 🎯 **Quick Access**
+```bash
+# After starting the server
+open http://localhost:3000/webui
+
+# Default login credentials
+Username: admin
+Password: admin123
+```
+
+### 🔐 **Security Features**
+- **Secure Authentication**: bcrypt password hashing with session management
+- **Role-based Access Control**: Admin and viewer roles
+- **Rate Limiting**: Protection against brute force attacks
+- **CSRF Protection**: Built-in security for all forms
+
+### 📊 **Dashboard Features**
+- **Real-time Monitoring**: Live API usage statistics and system health
+- **Interactive Charts**: Request trends, response times, error rates
+- **Recent Activity**: Live feed of API requests with status codes
+- **System Metrics**: Memory usage, uptime, and performance indicators
+
+### 🔑 **API Key Management**
+- **Create & Manage Keys**: Generate secure API keys with custom settings
+- **Usage Tracking**: Monitor key usage with detailed statistics
+- **Rate Limiting**: Configure per-key request limits
+- **Expiration Control**: Set automatic key expiry dates
+- **Security**: Keys are partially masked in list views
+
+### 📋 **Request/Response Logging**
+- **Comprehensive Logging**: All API requests logged to SQLite database
+- **Advanced Filtering**: Filter by date, status code, endpoint, API key
+- **Real-time Updates**: Live log streaming via WebSocket
+- **Detailed Inspection**: View full request/response data with syntax highlighting
+- **Performance Analysis**: Response time tracking and analysis
+
+### ⚙️ **System Configuration**
+- **Live Configuration**: Update settings without server restart
+- **Environment Management**: View and modify configuration variables
+- **CORS Settings**: Configure cross-origin resource sharing
+- **Logging Control**: Adjust log levels in real-time
+- **API Security**: Toggle API key requirements
+
+### 🚀 **Real-time Features**
+- **WebSocket Integration**: Live updates without page refresh
+- **Instant Notifications**: Toast notifications for all operations
+- **Live Monitoring**: Real-time dashboard updates
+- **Activity Streaming**: Live request monitoring
+
+### 📱 **Modern UI/UX**
+- **Responsive Design**: Works on desktop, tablet, and mobile
+- **Dark Mode Ready**: Professional interface with Tailwind CSS
+- **Interactive Charts**: Powered by Chart.js for rich visualizations
+- **Fast Performance**: Optimized for speed with lazy loading
+
+For detailed WebUI documentation, see [`webui/README.md`](webui/README.md).
 
 ### Debug Mode
 

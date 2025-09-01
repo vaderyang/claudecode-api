@@ -34,9 +34,6 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ): void => {
-  let error = { ...err };
-  error.message = err.message;
-
   logger.error(err.message, { 
     stack: err.stack,
     url: req.url,
@@ -44,15 +41,28 @@ export const errorHandler = (
     ip: req.ip
   });
 
-  if (error instanceof AppError) {
+  // Check for AppError instances (including AuthenticationError)
+  if (err instanceof AppError) {
     const errorResponse: ErrorResponse = {
       error: {
-        message: error.message,
-        type: 'invalid_request_error',
-        code: error.statusCode.toString()
+        message: err.message,
+        type: err.constructor.name === 'AuthenticationError' ? 'authentication_error' : 'invalid_request_error',
+        code: err.statusCode.toString()
       }
     };
-    res.status(error.statusCode).json(errorResponse);
+    res.status(err.statusCode).json(errorResponse);
+    return;
+  }
+
+  // Check for authentication errors by name (fallback)
+  if (err.name === 'AuthenticationError' || err.message.includes('Authorization header') || err.message.includes('API key')) {
+    const errorResponse: ErrorResponse = {
+      error: {
+        message: err.message,
+        type: 'authentication_error'
+      }
+    };
+    res.status(401).json(errorResponse);
     return;
   }
 

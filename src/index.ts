@@ -26,6 +26,7 @@
 import app from './app';
 import { config, validateConfig } from './config';
 import logger from './utils/logger';
+import { webSocketService } from './webui/websocket';
 
 const startServer = async (): Promise<void> => {
   try {
@@ -43,10 +44,18 @@ const startServer = async (): Promise<void> => {
       logger.info(`  Models: http://localhost:${config.port}/v1/models`);
       logger.info(`  Chat: http://localhost:${config.port}/v1/chat/completions`);
       logger.info(`  Responses: http://localhost:${config.port}/v1/responses`);
+      logger.info(`  WebUI: http://localhost:${config.port}/webui`);
+      logger.info(`  WebSocket: ws://localhost:${config.port}/ws`);
     });
+
+    // Initialize WebSocket service
+    webSocketService.initialize(server);
 
     const gracefulShutdown = (signal: string) => {
       logger.info(`Received ${signal}. Starting graceful shutdown...`);
+      
+      // Close WebSocket service first
+      webSocketService.close();
       
       server.close(() => {
         logger.info('HTTP server closed');
