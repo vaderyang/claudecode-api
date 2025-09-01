@@ -173,9 +173,14 @@ NODE_ENV=development
 OPENAI_API_KEY_REQUIRED=false
 LOG_LEVEL=info
 CORS_ORIGIN=*
+
+# WebUI Configuration
+SESSION_SECRET=your-secure-session-secret-here
+WEBUI_DEFAULT_PASSWORD=admin123
 ```
 
 **Important:** Claude Code SDK uses its own built-in authentication system. No API keys are required!
+**WebUI:** The web management interface requires session configuration for security.
 
 ### 3. Development
 
@@ -279,6 +284,13 @@ curl http://localhost:3000/v1/models/gpt-4 \
 - **GET** `/health/ready` - Readiness probe
 - **GET** `/health/live` - Liveness probe
 
+### WebSocket
+
+- **WebSocket** `/ws` - Real-time updates for WebUI dashboard
+  - Live request monitoring
+  - System metrics streaming
+  - Real-time notifications
+
 ## Environment Variables
 
 | Variable | Description | Default | Required |
@@ -288,8 +300,11 @@ curl http://localhost:3000/v1/models/gpt-4 \
 | `OPENAI_API_KEY_REQUIRED` | Require API key auth | `false` | No |
 | `LOG_LEVEL` | Logging level | `info` | No |
 | `CORS_ORIGIN` | CORS allowed origins | `*` | No |
+| `SESSION_SECRET` | WebUI session encryption key | `random` | Recommended |
+| `WEBUI_DEFAULT_PASSWORD` | Default admin password | `admin123` | No |
 
 **Note:** Claude Code SDK handles authentication internally - no API keys needed!
+**WebUI Note:** Set `SESSION_SECRET` to a secure random string in production.
 
 ## Client Examples
 
@@ -373,13 +388,29 @@ The API supports standard OpenAI parameters:
 
 ```
 src/
-├── config/           # Environment configuration
-├── controllers/      # Route handlers
-├── middleware/       # Express middleware
-├── services/         # Business logic and Claude Code integration
-├── types/           # TypeScript interfaces
-├── utils/           # Utilities and helpers
-└── app.ts           # Express application setup
+├── config/              # Environment configuration
+├── controllers/         # API route handlers
+├── middleware/          # Express middleware
+├── services/            # Business logic and Claude Code integration
+│   └── configService.ts # Dynamic configuration management
+├── types/               # TypeScript interfaces
+├── utils/               # Utilities and helpers
+├── webui/               # Web Management Interface
+│   ├── auth.ts         # Authentication services
+│   ├── controllers.ts  # WebUI API endpoints
+│   ├── database.ts     # SQLite database service
+│   ├── logging.ts      # Request logging middleware
+│   └── websocket.ts    # WebSocket service for real-time updates
+└── app.ts               # Express application setup
+
+webui/
+├── public/
+│   ├── index.html      # Web management interface
+│   └── app.js          # Frontend JavaScript
+└── README.md           # Detailed WebUI documentation
+
+data/
+└── webui.sqlite        # SQLite database (auto-created)
 ```
 
 ## Development
@@ -392,12 +423,27 @@ src/
 - `npm run typecheck` - Type checking
 - `npm run lint` - Linting (placeholder)
 
+### Database Management
+
+The WebUI uses SQLite for data persistence:
+
+- Database file: `data/webui.sqlite` (auto-created)
+- Tables: `api_keys`, `request_logs`, `analytics`, `webui_users`
+- Automatic schema initialization on startup
+
 ### Adding New Endpoints
 
 1. Create route handler in `src/controllers/`
 2. Add middleware if needed in `src/middleware/`
 3. Register routes in `src/app.ts`
 4. Add types in `src/types/`
+
+### WebUI Development
+
+1. **Backend**: Add new routes to `src/webui/controllers.ts`
+2. **Database**: Update schema in `src/webui/database.ts`
+3. **Frontend**: Add UI components to `webui/public/app.js`
+4. **WebSocket**: Add real-time features via `src/webui/websocket.ts`
 
 ## Error Handling
 
