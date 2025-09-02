@@ -43,37 +43,94 @@ import { requestLogger, startLogCleanup } from './webui/logging';
 
 const app = express();
 
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: [
-        "'self'",
-        "'unsafe-inline'", // Required for inline styles
-        "https://cdn.tailwindcss.com",
-        "https://cdnjs.cloudflare.com"
-      ],
-      scriptSrc: [
-        "'self'",
-        "'unsafe-inline'", // Required for inline scripts
-        "https://cdn.tailwindcss.com",
-        "https://cdn.jsdelivr.net",
-        "https://cdnjs.cloudflare.com"
-      ],
-      fontSrc: [
-        "'self'",
-        "data:"
-      ],
-      imgSrc: [
-        "'self'",
-        "data:"
-      ],
-      connectSrc: [
-        "'self'"
-      ]
+// Configure helmet based on environment
+const helmetConfig = config.nodeEnv === 'production' 
+  ? {
+      contentSecurityPolicy: {
+        directives: {
+          // Explicitly disable HTTPS upgrades to avoid forcing https on localhost
+          upgradeInsecureRequests: null,
+          defaultSrc: ["'self'"],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'", // Required for inline styles
+            "https://unpkg.com",
+            "https://cdn.jsdelivr.net",
+            "https://cdnjs.cloudflare.com"
+          ],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'", // Required for inline scripts
+            "https://unpkg.com",
+            "https://cdn.jsdelivr.net",
+            "https://cdnjs.cloudflare.com",
+            "https://cdn.tailwindcss.com"
+          ],
+          fontSrc: [
+            "'self'",
+            "data:"
+          ],
+          imgSrc: [
+            "'self'",
+            "data:"
+          ],
+          connectSrc: [
+            "'self'"
+          ]
+        }
+      }
     }
-  }
-}));
+  : {
+      // More permissive CSP for development
+      contentSecurityPolicy: {
+        directives: {
+          // Explicitly disable HTTPS upgrades to prevent browsers from rewriting http to https in dev
+          upgradeInsecureRequests: null,
+          defaultSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            "http://localhost:*",
+            "https://localhost:*",
+            "https://unpkg.com",
+            "https://cdn.jsdelivr.net",
+            "https://cdnjs.cloudflare.com"
+          ],
+          scriptSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            "'unsafe-eval'",
+            "http://localhost:*",
+            "https://localhost:*",
+            "https://unpkg.com",
+            "https://cdn.jsdelivr.net",
+            "https://cdnjs.cloudflare.com",
+            "https://cdn.tailwindcss.com"
+          ],
+          fontSrc: [
+            "'self'",
+            "data:",
+            "http://localhost:*",
+            "https://localhost:*"
+          ],
+          imgSrc: [
+            "'self'",
+            "data:",
+            "http://localhost:*",
+            "https://localhost:*"
+          ],
+          connectSrc: [
+            "'self'",
+            "http://localhost:*",
+            "https://localhost:*",
+            "ws://localhost:*",
+            "wss://localhost:*"
+          ]
+        }
+      }
+    };
+
+app.use(helmet(helmetConfig));
 
 app.use(cors({
   origin: config.corsOrigin === '*' ? true : config.corsOrigin.split(','),
@@ -123,6 +180,9 @@ app.use(morgan(morganFormat, {
   }
 }));
 
+// Static file serving for landing page
+app.use(express.static(path.join(__dirname, '../public')));
+
 // WebUI routes
 app.use('/api/webui', webUIController);
 app.use('/webui', express.static(path.join(__dirname, '../webui/public')));
@@ -136,17 +196,7 @@ app.use('/v1/responses', responsesRouter);
 app.use('/health', healthRouter);
 
 app.get('/', (_req, res) => {
-  res.json({
-    message: 'Claude Code API Server',
-    version: '1.0.0',
-    status: 'running',
-    endpoints: {
-      chat: '/v1/chat/completions',
-      models: '/v1/models',
-      responses: '/v1/responses',
-      health: '/health'
-    }
-  });
+  res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 app.use('*', (req, res) => {
