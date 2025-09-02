@@ -38,6 +38,118 @@ import { generateProgressiveReasoningTips, generateContextualReasoningTip } from
 
 const router = Router();
 
+/**
+ * @swagger
+ * /v1/chat/completions:
+ *   post:
+ *     summary: Create a chat completion
+ *     description: Creates a model response for the given chat conversation. Compatible with OpenAI's chat completions API.
+ *     tags:
+ *       - Chat
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ChatCompletionRequest'
+ *           examples:
+ *             basic_request:
+ *               summary: Basic chat completion request
+ *               value:
+ *                 model: "claudecode-v1"
+ *                 messages:
+ *                   - role: "user"
+ *                     content: "Write a Python function to implement a binary search algorithm with proper error handling"
+ *                 max_tokens: 1000
+ *                 temperature: 0.7
+ *             streaming_request:
+ *               summary: Streaming chat completion request
+ *               value:
+ *                 model: "claudecode-v1"
+ *                 messages:
+ *                   - role: "user"
+ *                     content: "Explain how to use async/await in JavaScript"
+ *                 stream: true
+ *                 max_tokens: 500
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ChatCompletionResponse'
+ *             examples:
+ *               completion_response:
+ *                 summary: Chat completion response
+ *                 value:
+ *                   id: "chatcmpl-123"
+ *                   object: "chat.completion"
+ *                   created: 1677652288
+ *                   model: "claudecode-v1"
+ *                   choices:
+ *                     - index: 0
+ *                       message:
+ *                         role: "assistant"
+ *                         content: "Here's a Python function implementing binary search with proper error handling:\n\n```python\ndef binary_search(arr, target):\n    if not arr:\n        raise ValueError('Array cannot be empty')\n    \n    left, right = 0, len(arr) - 1\n    \n    while left <= right:\n        mid = (left + right) // 2\n        \n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    \n    return -1  # Target not found\n```\n\nThis function includes input validation and returns the index of the target element or -1 if not found."
+ *                       finish_reason: "stop"
+ *                   usage:
+ *                     prompt_tokens: 12
+ *                     completion_tokens: 100
+ *                     total_tokens: 112
+ *           text/plain:
+ *             description: Server-sent events stream (when stream=true)
+ *             example: |
+ *               data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"claudecode-v1","choices":[{"index":0,"delta":{"content":"Here's"},"finish_reason":null}]}
+ *               
+ *               data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"claudecode-v1","choices":[{"index":0,"delta":{"content":" a Python"},"finish_reason":null}]}
+ *               
+ *               data: [DONE]
+ *       400:
+ *         description: Bad request - invalid parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             examples:
+ *               invalid_model:
+ *                 summary: Invalid model specified
+ *                 value:
+ *                   error:
+ *                     message: "Invalid model specified"
+ *                     type: "invalid_request_error"
+ *                     param: "model"
+ *                     code: "invalid_model"
+ *               missing_messages:
+ *                 summary: Missing messages
+ *                 value:
+ *                   error:
+ *                     message: "Missing required parameter: messages"
+ *                     type: "invalid_request_error"
+ *                     param: "messages"
+ *       401:
+ *         description: Authentication failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               error:
+ *                 message: "Invalid API key provided"
+ *                 type: "authentication_error"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               error:
+ *                 message: "Internal server error"
+ *                 type: "api_error"
+ *                 code: "500"
+ */
 router.post('/completions', 
   authenticateApiKey,
   validateChatCompletionRequest,

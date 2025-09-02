@@ -32,6 +32,46 @@ import * as fs from 'fs';
 
 const router = Router();
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check
+ *     description: Returns the health status of the API and its dependencies
+ *     tags:
+ *       - Health
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthResponse'
+ *             example:
+ *               status: "healthy"
+ *               timestamp: "2025-01-02T12:00:00.000Z"
+ *               uptime: 3600
+ *               version: "1.0.0"
+ *       503:
+ *         description: Service is degraded or unhealthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: ["degraded", "unhealthy"]
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                 uptime:
+ *                   type: number
+ *                 version:
+ *                   type: string
+ *                 services:
+ *                   type: object
+ */
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
   logger.debug('Health check endpoint accessed');
   

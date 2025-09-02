@@ -42,6 +42,44 @@ const availableModels: Model[] = [
   }
 ];
 
+/**
+ * @swagger
+ * /v1/models:
+ *   get:
+ *     summary: List available models
+ *     description: Lists the currently available models, and provides basic information about each one such as the owner and availability.
+ *     tags:
+ *       - Models
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ModelsResponse'
+ *             example:
+ *               object: "list"
+ *               data:
+ *                 - id: "claudecode-v1"
+ *                   object: "model"
+ *                   created: 1677610602
+ *                   owned_by: "claude-code"
+ *                   permission: []
+ *                   root: "claudecode-v1"
+ *                   parent: null
+ *       401:
+ *         description: Authentication failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               error:
+ *                 message: "Invalid API key provided"
+ *                 type: "authentication_error"
+ */
 router.get('/', authenticateApiKey, (_req: Request, res: Response): void => {
   logger.info('Models endpoint accessed');
   
@@ -53,6 +91,62 @@ router.get('/', authenticateApiKey, (_req: Request, res: Response): void => {
   res.json(response);
 });
 
+/**
+ * @swagger
+ * /v1/models/{model}:
+ *   get:
+ *     summary: Retrieve a model
+ *     description: Retrieves information about a specific model.
+ *     tags:
+ *       - Models
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: model
+ *         required: true
+ *         description: The ID of the model to retrieve
+ *         schema:
+ *           type: string
+ *           example: "claudecode-v1"
+ *     responses:
+ *       200:
+ *         description: Successful response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Model'
+ *             example:
+ *               id: "claudecode-v1"
+ *               object: "model"
+ *               created: 1677610602
+ *               owned_by: "claude-code"
+ *               permission: []
+ *               root: "claudecode-v1"
+ *               parent: null
+ *       401:
+ *         description: Authentication failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               error:
+ *                 message: "Invalid API key provided"
+ *                 type: "authentication_error"
+ *       404:
+ *         description: Model not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               error:
+ *                 message: "Model 'invalid-model' not found"
+ *                 type: "invalid_request_error"
+ *                 param: "model"
+ *                 code: "model_not_found"
+ */
 router.get('/:model', authenticateApiKey, (req: Request, res: Response): void => {
   const modelId = req.params['model'];
   logger.info('Model detail endpoint accessed', { modelId });

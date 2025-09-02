@@ -29,7 +29,9 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import session from 'express-session';
 import path from 'path';
+import swaggerUi from 'swagger-ui-express';
 import { config } from './config';
+import { swaggerSpec } from './config/swagger';
 import { errorHandler } from './middleware';
 import logger from './utils/logger';
 import chatRouter from './controllers/chat';
@@ -182,6 +184,24 @@ app.use(morgan(morganFormat, {
 
 // Static file serving for landing page
 app.use(express.static(path.join(__dirname, '../public')));
+
+// Swagger API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Claude Code API Documentation',
+  customfavIcon: '/favicon.ico',
+  swaggerOptions: {
+    docExpansion: 'list',
+    filter: true,
+    showRequestDuration: true
+  }
+}));
+
+// Swagger JSON endpoint
+app.get('/api-docs.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
 
 // WebUI routes
 app.use('/api/webui', webUIController);
